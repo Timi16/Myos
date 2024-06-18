@@ -1,26 +1,31 @@
 
-CC = clang
-LD = /data/data/com.termux/files/usr/bin/ld 
-ASM = /data/data/com.termux/files/usr/bin/nasm 
-CFLAGS = -ffreestanding -O2 -Wall -Wextra
-LDFLAGS = -T kernel/linker.ld
+CFLAGS=-ffreestanding -O2 -Wall -Wextra
 
-all: build/os-image.bin
+all: os-image
 
-build/bootloader.bin: boot/bootloader.asm
-	$(ASM) -f bin $< -o $@
+os-image: boot/boot.bin kernel.bin
+	cat $^ > os-image
 
-build/kernel.o: kernel/kernel.c kernel/kernel.h
-	$(CC) $(CFLAGS) -target i686-elf -c $< -o $@
+boot/boot.bin: boot/boot.s
+	nasm -f bin $< -o $@
 
-build/kernel.bin: build/kernel.o
-	$(LD) $(LDFLAGS) $< -o $@
+kernel.bin: kernel_entry.o kernel/kernel.o kernel/system_calls.o kernel/process.o memory/memory.o
+	ld -o $@ -Ttext 0x1000 $^ --oformat binary
 
-build/os-image.bin: build/bootloader.bin build/kernel.bin
-	cat $^ > $@
+kernel_entry.o: kernel/kernel_entry.s
+	nasm -f elf $< -o $@
+
+kernel/kernel.o: kernel/kernel.c
+	gcc $(CFLAGS) -c $< -o $@
+
+kernel/system_calls.o: kernel/system_calls.c
+	gcc $(CFLAGS) -c $< -o $@
+
+kernel/process.o: kernel/process.c
+	gcc $(CFLAGS) -c $< -o $@
+
+memory/memory.o: memory/memory.c
+	gcc $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f build/*.bin build/*.o
-
-run: all
-	qemu-system-i386 -drive format=raw,file=build/os-image.bin
+	rm -f *.o boot/*.bin kernel/*.o memory/*.o os-image
